@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WheelsEye Analytics Portal</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -172,8 +173,25 @@ tr:hover td{background:var(--bg-secondary);cursor:pointer}
 
 <div class="loading-screen" id="loading-screen">
   <div class="loading-logo">Wheels<em>Eye</em> Analytics</div>
-  <div class="loading-spinner"></div>
-  <div class="loading-msg" id="loading-msg">Signing you in…</div>
+  <div class="loading-spinner" id="loading-spinner"></div>
+  <div class="loading-msg" id="loading-msg">Checking sign-in…</div>
+  <div id="signin-btn-wrap" style="display:none;margin-top:20px">
+    <div id="g_id_onload"
+      data-client_id="763860246402-3purdgaufio5b3khi6j29mbcvmgj3dme.apps.googleusercontent.com"
+      data-callback="handleGoogleSignIn"
+      data-auto_select="true"
+      data-itp_support="true">
+    </div>
+    <div class="g_id_signin"
+      data-type="standard"
+      data-shape="rectangular"
+      data-theme="outline"
+      data-text="sign_in_with"
+      data-size="large"
+      data-logo_alignment="left">
+    </div>
+    <div id="signin-error" style="margin-top:12px;font-size:12px;color:#FF7B7B;text-align:center;display:none"></div>
+  </div>
 </div>
 
 <div id="main-app" style="display:none">
@@ -453,27 +471,46 @@ function apiPost(body) {
 }
 
 // ── BOOT ────────────────────────────────────────────────────
-window.addEventListener("load",function(){
-  setLoadingMsg("Signing you in…");
-  apiFetch({action:"whoami"}).then(function(res){
+// ── GOOGLE SIGN-IN HANDLER ───────────────────────────────────
+// Called automatically by Google after user authenticates.
+// Decodes the JWT token to get the email, matches against
+// EMAIL_TO_NAME in Code.gs via the whoami action.
+
+function handleGoogleSignIn(response) {
+  // Decode JWT payload (middle part of the token)
+  var payload = JSON.parse(atob(response.credential.split(".")[1]));
+  var email   = payload.email;
+  var name    = payload.name;
+
+  // Pass email to Apps Script to verify against EMAIL_TO_NAME
+  apiFetch({action:"whoami", email:email}).then(function(res){
     if(!res.authorized){
-      document.getElementById("loading-msg").textContent="Access denied. Contact your analytics team.";
+      document.getElementById("signin-error").style.display="block";
+      document.getElementById("signin-error").textContent="Access denied for "+email+". Contact your analytics team.";
       return;
     }
-    currentUser=res;
-    var h=new Date().getHours();
-    var greet=h<12?"Good morning":h<17?"Good afternoon":"Good evening";
-    document.getElementById("greeting-my").textContent=greet+", "+res.name;
-    document.getElementById("user-name-display").textContent=res.name;
-    document.getElementById("user-avatar").textContent=initials(res.name);
-    document.getElementById("nr-raised-by").value=res.name;
-    setLoadingMsg("Loading your tasks…");
-    return Promise.all([
-      apiFetch({action:"getTasks",pod:"all",stakeholder:"all"}),
-      apiFetch({action:"getProjects"})
-    ]);
-  }).then(function(results){
-    if(!results) return;
+    currentUser = { email:email, name:res.name, authorized:true };
+    bootApp();
+  }).catch(function(err){
+    document.getElementById("loading-msg").textContent="Error connecting. Please refresh.";
+    console.error(err);
+  });
+}
+
+function bootApp() {
+  var h=new Date().getHours();
+  var greet=h<12?"Good morning":h<17?"Good afternoon":"Good evening";
+  document.getElementById("greeting-my").textContent=greet+", "+currentUser.name;
+  document.getElementById("user-name-display").textContent=currentUser.name;
+  document.getElementById("user-avatar").textContent=initials(currentUser.name);
+  document.getElementById("nr-raised-by").value=currentUser.name;
+  setLoadingMsg("Loading your tasks…");
+  document.getElementById("loading-spinner").style.display="block";
+  document.getElementById("signin-btn-wrap").style.display="none";
+  Promise.all([
+    apiFetch({action:"getTasks",pod:"all",stakeholder:"all"}),
+    apiFetch({action:"getProjects"})
+  ]).then(function(results){
     allTasks=results[0].tasks||[];
     projectNames=results[1].projects||[];
     buildStakeholderFilter();
@@ -484,6 +521,15 @@ window.addEventListener("load",function(){
     document.getElementById("loading-msg").textContent="Error loading data. Please refresh.";
     console.error(err);
   });
+}
+
+window.addEventListener("load",function(){
+  // Show sign-in button after 1s (gives Google GSI script time to load)
+  setTimeout(function(){
+    document.getElementById("loading-spinner").style.display="none";
+    document.getElementById("loading-msg").textContent="Sign in with your Wheelseye account";
+    document.getElementById("signin-btn-wrap").style.display="block";
+  }, 1000);
 });
 
 function setLoadingMsg(m){document.getElementById("loading-msg").textContent=m;}
