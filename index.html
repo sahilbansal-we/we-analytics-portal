@@ -417,14 +417,14 @@ var submitting    = false;
 // Status normalisation
 var NOT_PICKED_STATUSES = ["not picked","not started","deprioritized","deprioritised",""];
 function normaliseStatus(s){
-  var v=(s||"").toLowerCase().trim();
+  var v=((s===null||s===undefined)?"":String(s)).toLowerCase().trim();
   if(v==="in progress"||v==="in-progress") return "wip";
   if(v==="completed") return "done";
   if(NOT_PICKED_STATUSES.indexOf(v)>-1) return "notpicked";
   return "notpicked";
 }
 function catKey(c){
-  var v=(c||"").toLowerCase();
+  var v=((c===null||c===undefined)?"":String(c)).toLowerCase();
   if(v.indexOf("dashboard")>-1||v.indexOf("report")>-1) return "dash";
   if(v.indexOf("feature")>-1) return "feat";
   if(v.indexOf("okr")>-1) return "okr";
@@ -539,7 +539,7 @@ function initials(n){return(n||"?").split(" ").map(function(w){return w[0];}).jo
 function getMyTasks(){
   return allTasks.filter(function(t){
     var podOk=currentPod==="all"||t.pod===currentPod;
-    var mine=t.stakeholder&&currentUser&&t.stakeholder.toLowerCase().indexOf(currentUser.name.split(" ")[0].toLowerCase())>-1;
+    var mine=t.stakeholder&&currentUser&&String(t.stakeholder||'').toLowerCase().indexOf(currentUser.name.split(" ")[0].toLowerCase())>-1;
     return podOk&&mine&&dateFilter(t);
   });
 }
@@ -719,7 +719,7 @@ function prioTag(p){
 function myActiveNonDone(){
   return allTasks.filter(function(t){
     return t.stakeholder&&currentUser&&
-      t.stakeholder.toLowerCase().indexOf(currentUser.name.split(" ")[0].toLowerCase())>-1&&
+      String(t.stakeholder||'').toLowerCase().indexOf(currentUser.name.split(" ")[0].toLowerCase())>-1&&
       normaliseStatus(t.status)!=="done";
   });
 }
