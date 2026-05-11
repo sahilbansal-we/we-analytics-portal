@@ -65,13 +65,15 @@ body{font-family:var(--font);font-size:13px;color:var(--text-primary);background
 .row-cat-label{font-size:10px;font-weight:500;color:var(--text-secondary);line-height:1.3;text-align:center;width:100%}
 .board-cell{padding:7px 8px;border-right:0.5px solid var(--border-primary);min-height:110px;display:flex;flex-direction:column;gap:6px}
 .board-cell:last-child{border-right:none}
-.task-card{display:flex;border-radius:var(--radius-md);overflow:hidden;cursor:pointer;transition:opacity .15s;border:0.5px solid transparent}
+.task-card{display:flex;flex-direction:row;align-items:stretch;border-radius:var(--radius-md);overflow:hidden;cursor:pointer;transition:opacity .15s;border:0.5px solid transparent;min-height:86px;width:100%;box-sizing:border-box}
 .task-card:hover{opacity:.8}
-.tc-owner{width:22px;min-width:22px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:500;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);padding:3px 0;color:#fff}
-.tc-prio{width:26px;min-width:26px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;border-left:0.5px solid rgba(0,0,0,.08)}
-.tc-body{flex:1;padding:4px 6px;min-width:0}
-.tc-project{font-size:10px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tc-due{font-size:9px;margin-top:2px;opacity:.75}.tc-due.ov{color:#A32D2D;opacity:1;font-weight:500}
+.tc-owner{display:none}
+.tc-prio{width:34px;min-width:34px;max-width:34px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;writing-mode:horizontal-tb}
+.tc-body{flex:1;padding:6px 8px;min-width:0;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.tc-project{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px;line-height:1.3}
+.tc-task{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.7;margin-bottom:4px;line-height:1.2}
+.tc-due{font-size:9px;opacity:.65;line-height:1}.tc-due.ov{color:#A32D2D;opacity:1;font-weight:500}
+.tc-stakeholder{width:50px;min-width:50px;max-width:50px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;letter-spacing:.04em;text-align:center;border-left:0.5px solid rgba(0,0,0,.12);flex-shrink:0;padding:4px 3px;line-height:1.3;word-break:break-word}
 .cat-dash .task-card{background:#EEF4FE;border-color:#B5D4F4}.cat-dash .tc-prio{background:#1565C0;color:#fff}.cat-dash .tc-project{color:#0C447C}.cat-dash .tc-task{color:#1565C0}.cat-dash .tc-due{color:#185FA5}.cat-dash .tc-stakeholder{background:#1565C0;color:#fff}
 .cat-data .task-card{background:#F3EEF9;border-color:#C9BAF0}.cat-data .tc-prio{background:#4527A0;color:#fff}.cat-data .tc-project{color:#3C3489}.cat-data .tc-task{color:#4527A0}.cat-data .tc-due{color:#534AB7}.cat-data .tc-stakeholder{background:#4527A0;color:#fff}
 .cat-feat .task-card{background:#FFF4E6;border-color:#FAC775}.cat-feat .tc-prio{background:#E65100;color:#fff}.cat-feat .tc-project{color:#633806}.cat-feat .tc-task{color:#E65100}.cat-feat .tc-due{color:#854F0B}.cat-feat .tc-stakeholder{background:#E65100;color:#fff}
@@ -197,7 +199,13 @@ tr:hover td{background:var(--bg-secondary);cursor:pointer}
 <div id="main-app" style="display:none">
   <div class="bar1">
     <div class="logo">Wheels<em>Eye</em> Analytics</div>
-    <div class="user-info"><span id="user-name-display">—</span><div class="avatar" id="user-avatar">—</div></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button onclick="refreshData()" id="refresh-btn" title="Refresh data from Sheet" style="background:rgba(255,255,255,0.08);border:0.5px solid rgba(255,255,255,0.15);border-radius:var(--radius-md);padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:5px;color:rgba(255,255,255,0.7);font-size:11px;transition:all .15s">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+      <div class="user-info"><span id="user-name-display">—</span><div class="avatar" id="user-avatar">—</div></div>
+    </div>
   </div>
   <div class="bar2">
     <div class="nav2-group">
@@ -477,12 +485,9 @@ function apiPost(body) {
 // EMAIL_TO_NAME in Code.gs via the whoami action.
 
 function handleGoogleSignIn(response) {
-  // Decode JWT payload (middle part of the token)
   var payload = JSON.parse(atob(response.credential.split(".")[1]));
   var email   = payload.email;
-  var name    = payload.name;
 
-  // Pass email to Apps Script to verify against EMAIL_TO_NAME
   apiFetch({action:"whoami", email:email}).then(function(res){
     if(!res.authorized){
       document.getElementById("signin-error").style.display="block";
@@ -490,6 +495,8 @@ function handleGoogleSignIn(response) {
       return;
     }
     currentUser = { email:email, name:res.name, authorized:true };
+    // Save to localStorage so next visit skips sign-in
+    try { localStorage.setItem("we_user", JSON.stringify(currentUser)); } catch(e){}
     bootApp();
   }).catch(function(err){
     document.getElementById("loading-msg").textContent="Error connecting. Please refresh.";
@@ -524,7 +531,20 @@ function bootApp() {
 }
 
 window.addEventListener("load",function(){
-  // Show sign-in button after 1s (gives Google GSI script time to load)
+  // Check localStorage for saved session first
+  try {
+    var saved = localStorage.getItem("we_user");
+    if(saved){
+      var user = JSON.parse(saved);
+      if(user && user.authorized && user.email && user.name){
+        currentUser = user;
+        document.getElementById("loading-msg").textContent="Welcome back, "+user.name+"…";
+        bootApp();
+        return;
+      }
+    }
+  } catch(e){}
+  // No saved session — show sign-in button after GSI loads
   setTimeout(function(){
     document.getElementById("loading-spinner").style.display="none";
     document.getElementById("loading-msg").textContent="Sign in with your Wheelseye account";
@@ -633,13 +653,11 @@ function buildBoard(tasks,elId){
           var firstName=t.stakeholder?(t.stakeholder.trim().split(" ")[0]):"";
           var stakeholderBar=isAllView&&firstName?'<div class="tc-stakeholder">'+esc(firstName.toUpperCase())+'</div>':'';
           html+='<div class="task-card" onclick="goTableTask(\''+esc(t.requestId)+'\')">'
-            +'<div class="tc-top">'
             +'<div class="tc-prio">'+esc(prio)+'</div>'
             +'<div class="tc-body">'
             +'<div class="tc-project">'+esc(t.projectName||"Untitled")+'</div>'
             +'<div class="tc-task">'+esc(t.task||"")+'</div>'
             +'<div class="tc-due'+(overdue?" ov":"")+'">Due: '+esc(dl||"—")+'</div>'
-            +'</div>'
             +'</div>'
             +stakeholderBar
             +'</div>';
@@ -1010,6 +1028,28 @@ function updateTriggerLabel(key){
   if(arr.length===0){lbl.textContent=labels[key];trig.classList.remove("has-sel");}
   else if(arr.length===1){lbl.textContent=arr[0];trig.classList.add("has-sel");}
   else{lbl.textContent=labels[key]+" ("+arr.length+")";trig.classList.add("has-sel");}
+}
+
+// ── REFRESH ──────────────────────────────────────────────────
+function refreshData(){
+  var btn=document.getElementById("refresh-btn");
+  btn.style.opacity=".5";
+  btn.style.pointerEvents="none";
+  Promise.all([
+    apiFetch({action:"getTasks",pod:"all",stakeholder:"all"}),
+    apiFetch({action:"getProjects"})
+  ]).then(function(results){
+    allTasks=results[0].tasks||[];
+    projectNames=results[1].projects||[];
+    buildStakeholderFilter();
+    refreshAll();
+    showToast("Data refreshed","success");
+  }).catch(function(){
+    showToast("Refresh failed. Try again.","error");
+  }).finally(function(){
+    btn.style.opacity="1";
+    btn.style.pointerEvents="auto";
+  });
 }
 
 // ── UTILS ────────────────────────────────────────────────────
