@@ -78,7 +78,11 @@ body{font-family:var(--font);font-size:13px;color:var(--text-primary);background
 .cat-data .task-card{background:#F3EEF9;border-color:#C9BAF0}.cat-data .tc-prio{background:#4527A0;color:#fff}.cat-data .tc-project{color:#3C3489}.cat-data .tc-task{color:#4527A0}.cat-data .tc-due{color:#534AB7}.cat-data .tc-stakeholder{background:#4527A0;color:#fff}
 .cat-feat .task-card{background:#FFF4E6;border-color:#FAC775}.cat-feat .tc-prio{background:#E65100;color:#fff}.cat-feat .tc-project{color:#633806}.cat-feat .tc-task{color:#E65100}.cat-feat .tc-due{color:#854F0B}.cat-feat .tc-stakeholder{background:#E65100;color:#fff}
 .cat-okr .task-card{background:#E8F5EE;border-color:#5DCAA5}.cat-okr .tc-prio{background:#1B5E20;color:#fff}.cat-okr .tc-project{color:#085041}.cat-okr .tc-task{color:#1B5E20}.cat-okr .tc-due{color:#0F6E56}.cat-okr .tc-stakeholder{background:#1B5E20;color:#fff}
+.cat-okr .task-card{background:#E8F5EE;border-color:#5DCAA5}.cat-okr .tc-prio{background:#1B5E20;color:#fff}.cat-okr .tc-project{color:#085041}.cat-okr .tc-task{color:#1B5E20}.cat-okr .tc-due{color:#0F6E56}.cat-okr .tc-stakeholder{background:#1B5E20;color:#fff}
 .cat-other .task-card{background:#F5F5F5;border-color:#D0D0D0}.cat-other .tc-prio{background:#424242;color:#fff}.cat-other .tc-project{color:#333}.cat-other .tc-task{color:#555}.cat-other .tc-due{color:#666}.cat-other .tc-stakeholder{background:#424242;color:#fff}
+.tc-prio-empty{background:transparent !important}
+.tc-done .tc-prio{background:transparent !important;width:8px;min-width:8px;max-width:8px}
+.tc-no-prio .tc-prio{background:transparent !important}
 
 /* ── FILTER BAR ── */
 .filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
@@ -137,6 +141,9 @@ tr:hover td{background:var(--bg-secondary);cursor:pointer}
 .prio-group{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .prio-slot{border:0.5px solid var(--border-primary);border-radius:var(--radius-md);cursor:pointer;transition:all .15s;overflow:hidden}
 .prio-slot.available:hover{border-color:#1D9E75}
+.prio-slot.req-taken{border-color:#EF9F27}
+.prio-slot.req-taken:hover{border-color:#E65100}
+.pb-req{background:#FAEEDA;color:#633806;font-size:9px;padding:1px 5px;border-radius:8px}
 .prio-slot.sel{border-color:#1D9E75;background:#E1F5EE}
 .prio-slot.taken{cursor:not-allowed;background:var(--bg-secondary)}
 .prio-slot-head{padding:6px 8px;display:flex;align-items:center;justify-content:space-between}
@@ -328,7 +335,7 @@ tr:hover td{background:var(--bg-secondary);cursor:pointer}
             <div class="form-grid">
               <div class="fg">
                 <label>Pod <span class="required">*</span></label>
-                <select id="nr-pod">
+                <select id="nr-pod" onchange="selectedPrio=null;renderPrioSelector()">
                   <option value="">Select pod</option>
                   <option>Cx Growth</option><option>Cx Payment</option><option>Exp-Service-Cost</option><option>Pricing-Plc</option><option>Supply Growth</option>
                 </select>
@@ -625,39 +632,63 @@ var BOARD_COLS=[
 
 function buildBoard(tasks,elId){
   var isAllView = elId === "board-all";
-  var counts=BOARD_COLS.map(function(c){
-    return tasks.filter(function(t){return normaliseStatus(t.status)===c.key;}).length;
+
+  // Filter completed tasks to last 4 weeks only
+  var fourWeeksAgo = new Date();
+  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+
+  var displayTasks = tasks.filter(function(t){
+    if(normaliseStatus(t.status) !== "done") return true;
+    // For completed, only show if delivered in last 4 weeks
+    var dDate = t.deliveredDate ? new Date(t.deliveredDate) : null;
+    if(!dDate || isNaN(dDate)) {
+      // fallback: try finalDeadline
+      dDate = t.finalDeadline ? new Date(t.finalDeadline) : null;
+    }
+    return dDate && dDate >= fourWeeksAgo;
   });
+
+  var counts = BOARD_COLS.map(function(c){
+    return displayTasks.filter(function(t){return normaliseStatus(t.status)===c.key;}).length;
+  });
+
   var html='<div class="board-header"><div class="bh-cat">Category</div>';
   BOARD_COLS.forEach(function(c,i){
     html+='<div class="bh-col">'+c.label+' <span class="col-count '+c.cls+'">'+counts[i]+'</span></div>';
   });
   html+='</div>';
-  // Always render all 4 categories — even if empty
+
   BOARD_CATS.forEach(function(cat){
     html+='<div class="board-row"><div class="row-cat"><div class="row-cat-label">'+cat.label+'</div></div>';
     BOARD_COLS.forEach(function(col){
       html+='<div class="board-cell cat-'+cat.key+'">';
-      var matching=tasks.filter(function(t){return catKey(t.category)===cat.key&&normaliseStatus(t.status)===col.key;});
+      var matching=displayTasks.filter(function(t){return catKey(t.category)===cat.key&&normaliseStatus(t.status)===col.key;});
       if(matching.length){
         matching.sort(function(a,b){
-          var pa=parseInt((a.assignedPriority||a.requestedPriority||"P99").replace(/[^0-9]/g,""))||99;
-          var pb=parseInt((b.assignedPriority||b.requestedPriority||"P99").replace(/[^0-9]/g,""))||99;
+          var pa=parseInt((a.assignedPriority||"99").replace(/[^0-9]/g,""))||99;
+          var pb=parseInt((b.assignedPriority||"99").replace(/[^0-9]/g,""))||99;
           return pa-pb;
         });
         matching.forEach(function(t){
-          var dl=t.finalDeadline||t.requestedDeadline||"";
-          var overdue=dl&&new Date(dl)<new Date()&&col.key!=="done";
-          var prio=t.assignedPriority||t.requestedPriority||"";
-          var dLabel=col.key==="done"?(t.deliveredDate?"Del: "+t.deliveredDate:"Done"):(dl?"Due: "+dl:"—");
-          var firstName=t.stakeholder?(t.stakeholder.trim().split(" ")[0]):"";
-          var stakeholderBar=isAllView&&firstName?'<div class="tc-stakeholder">'+esc(firstName.toUpperCase())+'</div>':'';
-          html+='<div class="task-card" onclick="goTableTask(\''+esc(t.requestId)+'\')">'
-            +'<div class="tc-prio">'+esc(prio)+'</div>'
+          var dl = t.finalDeadline||t.requestedDeadline||"";
+          var overdue = dl && new Date(dl)<new Date() && col.key!=="done";
+          // Only show assigned priority, and only for non-completed tasks
+          var prio = col.key!=="done" ? (t.assignedPriority||"") : "";
+          var dLabel = col.key==="done"
+            ? (t.deliveredDate ? "Del: "+t.deliveredDate : t.finalDeadline ? "Del: "+t.finalDeadline : "Done")
+            : (dl ? "Due: "+dl : "—");
+          var firstName = t.stakeholder ? t.stakeholder.trim().split(" ")[0] : "";
+          var stakeholderBar = isAllView&&firstName ? '<div class="tc-stakeholder">'+esc(firstName.toUpperCase())+'</div>' : '';
+          // Prio block: empty for completed, shown for active
+          var prioBlock = prio
+            ? '<div class="tc-prio">'+esc(prio)+'</div>'
+            : '<div class="tc-prio tc-prio-empty"></div>';
+          html+='<div class="task-card'+(col.key==="done"?" tc-done":"")+(prio?"":" tc-no-prio")+'" onclick="goTableTask(\''+esc(t.requestId)+'\')">'
+            +prioBlock
             +'<div class="tc-body">'
             +'<div class="tc-project">'+esc(t.projectName||"Untitled")+'</div>'
             +'<div class="tc-task">'+esc(t.task||"")+'</div>'
-            +'<div class="tc-due'+(overdue?" ov":"")+'">Due: '+esc(dl||"—")+'</div>'
+            +'<div class="tc-due'+(overdue?" ov":"")+'">'+esc(dLabel)+'</div>'
             +'</div>'
             +stakeholderBar
             +'</div>';
@@ -671,6 +702,7 @@ function buildBoard(tasks,elId){
   });
   document.getElementById(elId).innerHTML=html;
 }
+
 function uniqueOwners(tasks){var s=new Set();tasks.forEach(function(t){if(t.stakeholder)s.add(t.stakeholder);});return s.size;}
 
 // ── TASK DIRECTORY ───────────────────────────────────────────
@@ -746,6 +778,23 @@ function myActiveNonDone(){
       normaliseStatus(t.status)!=="done";
   });
 }
+
+// Returns map of assignedPriority -> task for a given pod (or all pods if no pod selected)
+// Used to show which assigned priorities are already taken in the selected pod
+function getAsgnPrioMapForPod(pod){
+  var map={};
+  var tasks = allTasks.filter(function(t){
+    var podMatch = !pod || t.pod === pod;
+    return podMatch && normaliseStatus(t.status)!=="done" && t.assignedPriority && String(t.assignedPriority).trim()!=="" && String(t.assignedPriority).trim()!=="-";
+  });
+  tasks.forEach(function(t){
+    var p = String(t.assignedPriority).trim();
+    if(p && !map[p]) map[p]=t;
+  });
+  return map;
+}
+
+// Returns map of requestedPriority -> task for current user's active tasks
 function getReqPrioMap(){
   var map={};
   myActiveNonDone().forEach(function(t){
@@ -754,29 +803,71 @@ function getReqPrioMap(){
   });
   return map;
 }
+
 function renderPrioSelector(){
-  var map=getReqPrioMap();
-  var levels=["P1","P2","P3","P4","P5","P6","P7","P8","P9","P10"];
-  var usedLevels=Object.keys(map);
-  var maxUsed=usedLevels.reduce(function(mx,p){var n=parseInt(p.replace(/\D/g,""))||0;return n>mx?n:mx;},0);
-  var showLevels=levels.slice(0,Math.max(5,maxUsed+1));
-  var html=showLevels.map(function(p){
-    var occ=map[p];
-    var isSel=selectedPrio===p;
-    var cls="prio-slot "+(isSel?"sel":occ?"taken":"available");
-    var badge=isSel?'<span class="prio-badge pb-sel">Selected</span>':occ?'<span class="prio-badge pb-taken">Taken</span>':'<span class="prio-badge pb-free">Free</span>';
-    var proj=occ?'<div class="prio-slot-proj">'+esc((occ.projectName||occ.task||"").slice(0,28))+'</div>':'<div class="prio-slot-proj">—</div>';
-    return'<div class="'+cls+'" onclick="selectNewPrio(\''+p+'\')">'
+  var pod = document.getElementById("nr-pod").value || "";
+  // Use assigned priorities from the selected pod to show what's taken
+  var asgnMap = getAsgnPrioMapForPod(pod);
+  var reqMap  = getReqPrioMap();
+
+  // Build list of priority levels to show (P1–P10, or up to max used + 1)
+  var allPrios = Object.keys(asgnMap).concat(Object.keys(reqMap));
+  var maxN = allPrios.reduce(function(mx,p){
+    var n=parseInt(p.replace(/\D/g,""))||0; return n>mx?n:mx;
+  }, 0);
+  var showCount = Math.max(5, maxN+1);
+  var levels = [];
+  for(var i=1;i<=showCount;i++) levels.push("P"+i);
+
+  var html = levels.map(function(p){
+    var asgnOcc = asgnMap[p];   // taken by analytics team assignment
+    var reqOcc  = reqMap[p];    // taken by my existing request
+    var isSel   = selectedPrio===p;
+    var cls     = "prio-slot ";
+    var badge, proj, labelNote;
+
+    if(isSel){
+      cls += "sel";
+      badge = '<span class="prio-badge pb-sel">Selected</span>';
+      proj  = '<div class="prio-slot-proj">—</div>';
+    } else if(asgnOcc){
+      // Taken by analytics team — show who has it, not selectable
+      cls += "taken";
+      badge = '<span class="prio-badge pb-taken">Assigned</span>';
+      proj  = '<div class="prio-slot-proj" title="'+esc(asgnOcc.projectName||asgnOcc.task||"")+'">'+esc((asgnOcc.projectName||asgnOcc.task||"").slice(0,22))+'</div>';
+    } else if(reqOcc){
+      // Taken by one of my existing requests — can still select (will swap)
+      cls += "available req-taken";
+      badge = '<span class="prio-badge pb-req">My request</span>';
+      proj  = '<div class="prio-slot-proj" title="'+esc(reqOcc.projectName||"")+'">'+esc((reqOcc.projectName||"").slice(0,22))+'</div>';
+    } else {
+      cls += "available";
+      badge = '<span class="prio-badge pb-free">Free</span>';
+      proj  = '<div class="prio-slot-proj">—</div>';
+    }
+
+    var clickable = !asgnOcc; // can't select analytics-assigned priorities
+    return '<div class="'+cls+'"'+(clickable?' onclick="selectNewPrio(\''+p+'\')"':'')+' style="'+(asgnOcc?'cursor:not-allowed;':'cursor:pointer;')+'">'
       +'<div class="prio-slot-head"><span class="prio-label">'+p+'</span>'+badge+'</div>'
       +proj+'</div>';
   }).join("");
+
   document.getElementById("prio-group").innerHTML=html;
+
   var note=document.getElementById("prio-swap-note");
-  if(selectedPrio&&map[selectedPrio]){
+  if(selectedPrio && reqMap[selectedPrio]){
     note.style.display="block";
-    note.textContent="⚠ Selecting "+selectedPrio+" will push '"+map[selectedPrio].projectName+"' down to the next free slot.";
-  }else{note.style.display="none";}
+    note.textContent="⚠ Selecting "+selectedPrio+" will push '"+reqMap[selectedPrio].projectName+"' to the next free slot.";
+  } else if(selectedPrio && asgnMap[selectedPrio]){
+    // deselect if pod changed and this priority is now taken
+    selectedPrio=null;
+    note.style.display="none";
+    document.getElementById("prio-group").innerHTML=html;
+  } else {
+    note.style.display="none";
+  }
 }
+
 function selectNewPrio(p){selectedPrio=p;renderPrioSelector();}
 
 // ── NOT PICKED TABLE ──────────────────────────────────────────
