@@ -39,12 +39,12 @@ body{font-family:var(--font);font-size:13px;color:var(--text-primary);background
 
 /* ── TILES ── */
 .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
-.tile{border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer;transition:opacity .15s}
+.tile{border-radius:var(--radius-lg);padding:18px 16px;cursor:pointer;transition:opacity .15s}
 .tile:hover{opacity:.88}
 .tile-t1{background:#1E2124}.tile-t2{background:#2A3A4A}.tile-t3{background:#1A2E42}.tile-t4{background:#0D3528}
-.tile-label{font-size:10px;font-weight:500;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
-.tile-val{font-size:28px;font-weight:500;line-height:1;margin-bottom:5px;color:#fff}
-.tile-sub{font-size:11px;color:#FF7B7B;font-weight:500}.tile-sub-n{font-size:11px;color:rgba(255,255,255,0.45)}
+.tile-label{font-size:11px;font-weight:600;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;text-align:center}
+.tile-val{font-size:36px;font-weight:600;line-height:1;margin-bottom:6px;color:#fff;text-align:center}
+.tile-sub{font-size:12px;color:#FF7B7B;font-weight:500;text-align:center}.tile-sub-n{font-size:12px;color:rgba(255,255,255,0.45);text-align:center}
 
 /* ── DATE FILTERS ── */
 .date-filters{display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap}
@@ -70,9 +70,9 @@ body{font-family:var(--font);font-size:13px;color:var(--text-primary);background
 .tc-owner{display:none}
 .tc-prio{width:34px;min-width:34px;max-width:34px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;writing-mode:horizontal-tb}
 .tc-body{flex:1;padding:6px 8px;min-width:0;width:0;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
-.tc-project{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px;line-height:1.3;display:block;max-width:100%}
-.tc-task{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.7;margin-bottom:4px;line-height:1.2;display:block;max-width:100%}
-.tc-due{font-size:9px;opacity:.65;line-height:1}.tc-due.ov{color:#A32D2D;opacity:1;font-weight:500}
+.tc-project{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;line-height:1.3;display:block;max-width:100%}
+.tc-task{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.7;margin-bottom:5px;line-height:1.2;display:block;max-width:100%}
+.tc-due{font-size:10px;opacity:.65;line-height:1}.tc-due.ov{color:#A32D2D;opacity:1;font-weight:500}
 .tc-stakeholder{width:50px;min-width:50px;max-width:50px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;letter-spacing:.04em;text-align:center;border-left:0.5px solid rgba(0,0,0,.12);flex-shrink:0;padding:4px 3px;line-height:1.3;word-break:break-word}
 .cat-dash .task-card{background:#EEF4FE;border-color:#B5D4F4}.cat-dash .tc-prio{background:#1565C0;color:#fff}.cat-dash .tc-project{color:#0C447C}.cat-dash .tc-task{color:#1565C0}.cat-dash .tc-due{color:#185FA5}.cat-dash .tc-stakeholder{background:#1565C0;color:#fff}
 .cat-data .task-card{background:#F3EEF9;border-color:#C9BAF0}.cat-data .tc-prio{background:#4527A0;color:#fff}.cat-data .tc-project{color:#3C3489}.cat-data .tc-task{color:#4527A0}.cat-data .tc-due{color:#534AB7}.cat-data .tc-stakeholder{background:#4527A0;color:#fff}
@@ -109,6 +109,8 @@ th{text-align:left;font-size:10px;font-weight:500;color:var(--text-tertiary);tex
 td{padding:8px 10px;border-bottom:0.5px solid var(--border-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--bg-secondary);cursor:pointer}
+.sort-icon{font-size:10px;opacity:.4;margin-left:2px}
+th:hover .sort-icon{opacity:.8}
 .pill{display:inline-flex;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;white-space:nowrap}
 .p-notpicked{background:#E6F1FB;color:#0C447C}.p-wip{background:#FAEEDA;color:#633806}
 .p-done{background:#EAF3DE;color:#27500A}.p-deprio{background:#F0F0F0;color:#666}
@@ -224,8 +226,7 @@ tr:hover td{background:var(--bg-secondary);cursor:pointer}
     <button class="new-req-btn" onclick="switchView('newreq')"><span style="font-size:15px;line-height:1">+</span> New request</button>
   </div>
   <div class="bar3" id="pod-bar">
-    <div class="pod-tab active" onclick="setPod('all',this)">All</div>
-    <div class="pod-tab" onclick="setPod('Cx Growth',this)">Cx Growth</div>
+    <div class="pod-tab active" onclick="setPod('Cx Growth',this)">Cx Growth</div>
     <div class="pod-tab" onclick="setPod('Cx Payment',this)">Cx Payment</div>
     <div class="pod-tab" onclick="setPod('Exp-Service-Cost',this)">Exp-Service-Cost</div>
     <div class="pod-tab" onclick="setPod('Pricing-Plc',this)">Pricing-Plc</div>
@@ -303,20 +304,19 @@ tr:hover td{background:var(--bg-secondary);cursor:pointer}
         <table>
           <thead>
             <tr>
-              <th style="width:70px">Req ID</th>
-              <th style="width:70px">Stakeholder</th>
-              <th style="width:80px">Category</th>
-              <th style="width:120px">Project name</th>
-              <th style="width:140px">Task</th>
-              <th style="width:66px">Status</th>
-              <th style="width:48px">Owner</th>
-              <th style="width:56px">Req. Prio</th>
-              <th style="width:56px">Asgn. Prio</th>
-              <th style="width:56px">Req. Date</th>
-              <th style="width:60px">Deadline</th>
-              <th style="width:60px">Final DL</th>
-              <th style="width:56px">Delivered</th>
-              <th style="width:130px">Analytics Notes</th>
+              <th style="width:70px;cursor:pointer;user-select:none" onclick="sortTable('requestId')">Req ID <span class="sort-icon" id="si-requestId"></span></th>
+              <th style="width:80px;cursor:pointer;user-select:none" onclick="sortTable('stakeholder')">Stakeholder <span class="sort-icon" id="si-stakeholder"></span></th>
+              <th style="width:90px;cursor:pointer;user-select:none" onclick="sortTable('category')">Category <span class="sort-icon" id="si-category"></span></th>
+              <th style="width:130px;cursor:pointer;user-select:none" onclick="sortTable('projectName')">Project name <span class="sort-icon" id="si-projectName"></span></th>
+              <th style="width:150px;cursor:pointer;user-select:none" onclick="sortTable('task')">Task <span class="sort-icon" id="si-task"></span></th>
+              <th style="width:70px;cursor:pointer;user-select:none" onclick="sortTable('status')">Status <span class="sort-icon" id="si-status"></span></th>
+              <th style="width:60px;cursor:pointer;user-select:none" onclick="sortTable('requestedPriority')">Req. Prio <span class="sort-icon" id="si-requestedPriority"></span></th>
+              <th style="width:60px;cursor:pointer;user-select:none" onclick="sortTable('assignedPriority')">Asgn. Prio <span class="sort-icon" id="si-assignedPriority"></span></th>
+              <th style="width:60px;cursor:pointer;user-select:none" onclick="sortTable('requestDate')">Req. Date <span class="sort-icon" id="si-requestDate"></span></th>
+              <th style="width:64px;cursor:pointer;user-select:none" onclick="sortTable('requestedDeadline')">Deadline <span class="sort-icon" id="si-requestedDeadline"></span></th>
+              <th style="width:64px;cursor:pointer;user-select:none" onclick="sortTable('finalDeadline')">Final DL <span class="sort-icon" id="si-finalDeadline"></span></th>
+              <th style="width:60px;cursor:pointer;user-select:none" onclick="sortTable('deliveredDate')">Delivered <span class="sort-icon" id="si-deliveredDate"></span></th>
+              <th style="width:130px;cursor:pointer;user-select:none" onclick="sortTable('analyticsComments')">Analytics Notes <span class="sort-icon" id="si-analyticsComments"></span></th>
             </tr>
           </thead>
           <tbody id="task-tbody"></tbody>
@@ -394,7 +394,7 @@ tr:hover td{background:var(--bg-secondary);cursor:pointer}
                 <tr>
                   <th style="width:56px;padding-left:14px">Req ID</th>
                   <th style="width:130px">Project name</th>
-                  <th style="width:80px">Category</th>
+                  <th style="width:80px;cursor:pointer;user-select:none" onclick="sortTable('category')">Category <span class="sort-icon" id="si-category"></span></th>
                   <th style="width:110px">Req. Priority</th>
                   <th style="width:80px">Asgn. Priority</th>
                   <th style="width:68px">Needed by</th>
@@ -423,7 +423,7 @@ var TOKEN      = "WE_ANLYTX_2026_X9Q";
 var currentUser   = null;   // { email, name, authorized }
 var allTasks      = [];     // raw from sheet
 var projectNames  = [];     // for autocomplete
-var currentPod    = "all";
+var currentPod    = "Cx Growth";
 var currentDateF  = "all";
 var filters       = { sh:[], cat:[], st:[] };
 var selectedPrio  = null;
@@ -726,13 +726,13 @@ function filterTable(){
     var srOk=!search||(t.projectName||"").toLowerCase().indexOf(search.toLowerCase())>-1;
     return shOk&&catOk&&stOk&&srOk;
   });
-  renderTable(tasks);
+  renderTable(sortedTasks(tasks));
 }
 
 function renderTable(tasks){
   var tbody=document.getElementById("task-tbody");
   if(!tasks||!tasks.length){
-    tbody.innerHTML='<tr><td colspan="14" style="text-align:center;padding:24px;color:var(--text-tertiary)">No tasks match</td></tr>';
+    tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--text-tertiary)">No tasks match</td></tr>';
     return;
   }
   tbody.innerHTML=tasks.map(function(t){
@@ -746,7 +746,6 @@ function renderTable(tasks){
       +'<td style="font-weight:500">'+esc(t.projectName)+'</td>'
       +'<td style="color:var(--text-secondary)">'+esc(t.task)+'</td>'
       +'<td>'+statusPill(ns)+'</td>'
-      +'<td><span class="owner-chip">'+esc(t.stakeholder?t.stakeholder.slice(0,3).toUpperCase():"—")+'</span></td>'
       +'<td>'+prioTag(t.requestedPriority)+'</td>'
       +'<td>'+prioTag(t.assignedPriority)+'</td>'
       +'<td>'+esc(t.requestDate)+'</td>'
@@ -1119,6 +1118,53 @@ function updateTriggerLabel(key){
   if(arr.length===0){lbl.textContent=labels[key];trig.classList.remove("has-sel");}
   else if(arr.length===1){lbl.textContent=arr[0];trig.classList.add("has-sel");}
   else{lbl.textContent=labels[key]+" ("+arr.length+")";trig.classList.add("has-sel");}
+}
+
+// ── SORT TABLE ───────────────────────────────────────────────
+var sortState = { field: null, asc: true };
+
+function sortTable(field) {
+  if(sortState.field === field){
+    sortState.asc = !sortState.asc;
+  } else {
+    sortState.field = field;
+    sortState.asc = true;
+  }
+  // Update sort icons
+  document.querySelectorAll('.sort-icon').forEach(function(el){ el.textContent = '⇅'; el.style.opacity='.4'; });
+  var icon = document.getElementById('si-'+field);
+  if(icon){ icon.textContent = sortState.asc ? ' ↑' : ' ↓'; icon.style.opacity='1'; }
+  filterTable();
+}
+
+function sortedTasks(tasks) {
+  if(!sortState.field) return tasks;
+  var f = sortState.field;
+  var asc = sortState.asc;
+  return tasks.slice().sort(function(a, b){
+    var av = (a[f]||'').toString().toLowerCase();
+    var bv = (b[f]||'').toString().toLowerCase();
+    // Numeric sort for priority fields and request ID
+    if(f==='requestedPriority'||f==='assignedPriority'){
+      av = parseInt(av.replace(/\D/g,''))||999;
+      bv = parseInt(bv.replace(/\D/g,''))||999;
+      return asc ? av-bv : bv-av;
+    }
+    if(f==='requestId'){
+      av = parseInt(av)||0; bv = parseInt(bv)||0;
+      return asc ? av-bv : bv-av;
+    }
+    // Date sort
+    if(f==='requestDate'||f==='requestedDeadline'||f==='finalDeadline'||f==='deliveredDate'){
+      var da = av ? new Date(av) : new Date(0);
+      var db = bv ? new Date(bv) : new Date(0);
+      return asc ? da-db : db-da;
+    }
+    // String sort
+    if(av<bv) return asc ? -1 : 1;
+    if(av>bv) return asc ? 1 : -1;
+    return 0;
+  });
 }
 
 // ── REFRESH ──────────────────────────────────────────────────
