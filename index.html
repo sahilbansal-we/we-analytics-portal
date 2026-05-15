@@ -502,8 +502,6 @@ function handleGoogleSignIn(response) {
       return;
     }
     currentUser = { email:email, name:res.name, authorized:true };
-    // Save to localStorage so next visit skips sign-in
-    try { localStorage.setItem("we_user", JSON.stringify(currentUser)); } catch(e){}
     bootApp();
   }).catch(function(err){
     document.getElementById("loading-msg").textContent="Error connecting. Please refresh.";
@@ -538,20 +536,7 @@ function bootApp() {
 }
 
 window.addEventListener("load",function(){
-  // Check localStorage for saved session first
-  try {
-    var saved = localStorage.getItem("we_user");
-    if(saved){
-      var user = JSON.parse(saved);
-      if(user && user.authorized && user.email && user.name){
-        currentUser = user;
-        document.getElementById("loading-msg").textContent="Welcome back, "+user.name+"…";
-        bootApp();
-        return;
-      }
-    }
-  } catch(e){}
-  // No saved session — show sign-in button after GSI loads
+  // Show sign-in button after GSI script loads
   setTimeout(function(){
     document.getElementById("loading-spinner").style.display="none";
     document.getElementById("loading-msg").textContent="Sign in with your Wheelseye account";
