@@ -750,60 +750,53 @@ function renderTable(tasks){
     tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--text-tertiary)">No tasks match</td></tr>';
     return;
   }
-  var edit = canEdit();
-  tbody.innerHTML=tasks.map(function(t){
+  var edit=canEdit();
+
+  // Build rows
+  var rows=tasks.map(function(t){
     var ns=normaliseStatus(t.status);
     var dl=t.finalDeadline||t.requestedDeadline||"";
     var od=dl&&new Date(dl)<new Date()&&ns!=="done";
-
-    function cell(field, display, extraStyle){
-      var style = extraStyle || "";
-      if(edit){
-        return '<td class="editable-cell" style="'+style+'" onclick="makeEditable(this,__TASK__,''+field+'')" title="Click to edit">'+display+'</td>';
-      }
-      return '<td style="'+style+'">'+display+'</td>';
-    }
-
-    var row = '<tr>'
+    var ec=edit?'editable-cell':'';
+    return '<tr data-rid="'+esc(t.requestId)+'">'
       +'<td style="color:var(--text-tertiary)">'+esc(t.requestId)+'</td>'
-      +cell('stakeholder', esc(t.stakeholder))
-      +cell('category', esc(t.category))
-      +cell('projectName', esc(t.projectName), 'font-weight:500')
-      +cell('task', esc((t.task||"").slice(0,60)), 'color:var(--text-secondary)')
-      +cell('status', statusPill(ns))
-      +cell('requestedPriority', prioTag(t.requestedPriority))
-      +cell('assignedPriority', prioTag(t.assignedPriority))
-      +cell('requestDate', esc(t.requestDate))
-      +cell('requestedDeadline', esc(t.requestedDeadline))
-      +cell('finalDeadline', esc(t.finalDeadline), od?"color:#A32D2D":"")
-      +cell('deliveredDate', esc(t.deliveredDate))
-      +cell('analyticsComments', esc((t.analyticsComments||"").slice(0,60).replace(/\[NOTIFIED[^\]]*\]/g,"").trim()), 'font-size:10px;color:var(--text-tertiary)')
+      +'<td class="'+ec+'" data-field="stakeholder">'+esc(t.stakeholder)+'</td>'
+      +'<td class="'+ec+'" data-field="category">'+esc(t.category)+'</td>'
+      +'<td class="'+ec+'" data-field="projectName" style="font-weight:500">'+esc(t.projectName)+'</td>'
+      +'<td class="'+ec+'" data-field="task" style="color:var(--text-secondary)">'+esc((t.task||"").slice(0,60))+'</td>'
+      +'<td class="'+ec+'" data-field="status">'+statusPill(ns)+'</td>'
+      +'<td class="'+ec+'" data-field="requestedPriority">'+prioTag(t.requestedPriority)+'</td>'
+      +'<td class="'+ec+'" data-field="assignedPriority">'+prioTag(t.assignedPriority)+'</td>'
+      +'<td class="'+ec+'" data-field="requestDate">'+esc(t.requestDate)+'</td>'
+      +'<td class="'+ec+'" data-field="requestedDeadline">'+esc(t.requestedDeadline)+'</td>'
+      +'<td class="'+ec+'" data-field="finalDeadline" style="color:'+(od?'#A32D2D':'inherit')+'">'+esc(t.finalDeadline)+'</td>'
+      +'<td class="'+ec+'" data-field="deliveredDate">'+esc(t.deliveredDate)+'</td>'
+      +'<td class="'+ec+'" data-field="analyticsComments" style="font-size:10px;color:var(--text-tertiary)">'+esc((t.analyticsComments||"").replace(/\[NOTIFIED[^\]]*\]/g,"").trim().slice(0,60))+'</td>'
       +'</tr>';
-
-    // Replace __TASK__ placeholder with actual task reference
-    return row;
   }).join("");
 
-  // Wire up editable cells with actual task references
-  var rows = tbody.querySelectorAll("tr");
-  tasks.forEach(function(t, i){
-    if(!edit) return;
-    var tds = rows[i] ? rows[i].querySelectorAll(".editable-cell") : [];
-    var fields = ["stakeholder","category","projectName","task","status","requestedPriority","assignedPriority","requestDate","requestedDeadline","finalDeadline","deliveredDate","analyticsComments"];
-    tds.forEach(function(td, j){
-      (function(task, field){
-        td.onclick = function(){ makeEditable(this, task, field); };
-      })(t, fields[j]);
-    });
-  });
+  tbody.innerHTML=rows;
 
-  // Show editor badge in header if user can edit
-  var heading = document.getElementById("table-heading");
-  if(edit && heading && !heading.querySelector(".editor-badge")){
-    var badge = document.createElement("span");
-    badge.className = "editor-badge";
-    badge.textContent = "✎ Edit mode";
-    heading.appendChild(badge);
+  // Wire click handlers using data attributes
+  if(edit){
+    var trs=tbody.querySelectorAll("tr");
+    trs.forEach(function(tr,i){
+      var task=tasks[i];
+      tr.querySelectorAll(".editable-cell").forEach(function(td){
+        td.onclick=function(){
+          makeEditable(this, task, this.getAttribute("data-field"));
+        };
+      });
+    });
+
+    // Show editor badge
+    var heading=document.getElementById("table-heading");
+    if(heading&&!heading.querySelector(".editor-badge")){
+      var badge=document.createElement("span");
+      badge.className="editor-badge";
+      badge.textContent=" ✎ Edit mode";
+      heading.appendChild(badge);
+    }
   }
 }
 
