@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WheelsEye Analytics Portal</title>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -203,10 +203,17 @@ th:hover .sort-icon{opacity:.8}
 <div class="loading-screen" id="loading-screen">
   <div class="loading-logo">Wheels<em>Eye</em> Analytics</div>
   <div class="loading-spinner" id="loading-spinner"></div>
-  <div class="loading-msg" id="loading-msg">Checking sign-in…</div>
-  <div id="signin-btn-wrap" style="display:none;margin-top:20px">
-    <div id="g_id_signin_btn"></div>
-    <div id="signin-error" style="margin-top:12px;font-size:12px;color:#FF7B7B;text-align:center;display:none"></div>
+  <div class="loading-msg" id="loading-msg">Loading…</div>
+  <div id="signin-btn-wrap" style="display:none;margin-top:24px;width:300px">
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;text-align:center">Enter your Wheelseye email to sign in</div>
+    <input id="email-input" type="email" placeholder="yourname@wheelseye.com"
+      style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;font-size:13px;outline:none;font-family:inherit"
+      onkeydown="if(event.key==='Enter')submitEmail()">
+    <button onclick="submitEmail()"
+      style="width:100%;margin-top:8px;padding:10px;background:#1D9E75;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:500;cursor:pointer">
+      Sign in →
+    </button>
+    <div id="signin-error" style="margin-top:10px;font-size:11px;color:#FF7B7B;text-align:center;display:none"></div>
   </div>
 </div>
 
@@ -553,29 +560,53 @@ function bootApp() {
   });
 }
 
-function initGoogleSignIn(){
-  if(!window.google || !window.google.accounts){
-    setTimeout(initGoogleSignIn, 200);
+function submitEmail(){
+  var email = document.getElementById("email-input").value.trim().toLowerCase();
+  if(!email){
+    document.getElementById("signin-error").style.display="block";
+    document.getElementById("signin-error").textContent="Please enter your email address";
     return;
   }
-  google.accounts.id.initialize({
-    client_id: "763860246402-3purdgaufio5b3khi6j29mbcvmgj3dme.apps.googleusercontent.com",
-    callback: handleGoogleSignIn,
-    use_fedcm_for_prompt: false,
-    auto_select: false,
-    cancel_on_tap_outside: false
+  if(!email.endsWith("@wheelseye.com")){
+    document.getElementById("signin-error").style.display="block";
+    document.getElementById("signin-error").textContent="Please use your @wheelseye.com email";
+    return;
+  }
+  document.getElementById("signin-btn-wrap").style.display="none";
+  document.getElementById("loading-spinner").style.display="block";
+  document.getElementById("loading-msg").textContent="Verifying…";
+
+  apiFetch({action:"whoami", email:email}).then(function(res){
+    if(!res.authorized){
+      document.getElementById("signin-btn-wrap").style.display="block";
+      document.getElementById("loading-spinner").style.display="none";
+      document.getElementById("loading-msg").textContent="";
+      document.getElementById("signin-error").style.display="block";
+      document.getElementById("signin-error").textContent="Access denied for "+email+". Contact your analytics team.";
+      return;
+    }
+    currentUser={email:email, name:res.name, authorized:true};
+    bootApp();
+  }).catch(function(){
+    document.getElementById("signin-btn-wrap").style.display="block";
+    document.getElementById("loading-spinner").style.display="none";
+    document.getElementById("loading-msg").textContent="";
+    document.getElementById("signin-error").style.display="block";
+    document.getElementById("signin-error").textContent="Connection error. Please try again.";
   });
-  google.accounts.id.renderButton(
-    document.getElementById("g_id_signin_btn"),
-    { theme:"outline", size:"large", text:"sign_in_with", shape:"rectangular", logo_alignment:"left", width:280 }
-  );
-  document.getElementById("loading-spinner").style.display="none";
-  document.getElementById("loading-msg").textContent="Sign in with your Wheelseye account";
-  document.getElementById("signin-btn-wrap").style.display="block";
 }
 
+// Remove old Google Sign-In handler (no longer needed)
+function handleGoogleSignIn(){}
+
 window.addEventListener("load",function(){
-  initGoogleSignIn();
+  document.getElementById("loading-spinner").style.display="none";
+  document.getElementById("loading-msg").textContent="";
+  document.getElementById("signin-btn-wrap").style.display="block";
+  setTimeout(function(){
+    var inp=document.getElementById("email-input");
+    if(inp) inp.focus();
+  },100);
 });
 
 function setLoadingMsg(m){document.getElementById("loading-msg").textContent=m;}
