@@ -168,6 +168,24 @@ th:hover .sort-icon{opacity:.8}
 .np-swap-note{font-size:10px;color:#EF9F27;padding:6px 16px;display:none;font-style:italic}
 .np-swap-note.show{display:block}
 
+/* ── DRAG AND DROP ── */
+.task-card.dragging{opacity:.4;transform:scale(.97)}
+.board-cell.drag-over{background:rgba(29,158,117,0.08);border:1.5px dashed #1D9E75}
+.drag-handle{cursor:grab;opacity:.4;font-size:10px;padding:0 2px}
+.drag-handle:hover{opacity:.9}
+
+/* ── INLINE EDIT (Task Directory) ── */
+.editable-cell{cursor:pointer;border-radius:3px;padding:2px 4px;transition:background .15s}
+.editable-cell:hover{background:var(--bg-secondary)}
+.edit-input{padding:4px 6px;border:1px solid #1D9E75;border-radius:var(--radius-md);font-size:11px;background:var(--bg-primary);color:var(--color-text-primary);font-family:var(--font);width:100%;outline:none}
+.edit-select{padding:4px 6px;border:1px solid #1D9E75;border-radius:var(--radius-md);font-size:11px;background:var(--bg-primary);color:var(--color-text-primary);font-family:var(--font);width:100%;outline:none}
+.edit-saving{opacity:.5;pointer-events:none}
+.row-dirty{background:#FFFDE7 !important}
+.edit-error{color:#A32D2D;font-size:10px;padding:2px 4px}
+.save-row-btn{font-size:10px;padding:3px 8px;background:#1D9E75;color:#fff;border:none;border-radius:3px;cursor:pointer;margin-left:4px}
+.save-row-btn:hover{background:#0F6E56}
+.editor-badge{font-size:10px;color:#1D9E75;font-weight:500;margin-left:8px}
+
 /* ── LOADING / ERROR ── */
 .loading-screen{position:fixed;top:0;left:0;right:0;bottom:0;background:#1E2124;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999}
 .loading-logo{font-size:22px;font-weight:500;color:#fff;margin-bottom:16px}.loading-logo em{color:#1D9E75;font-style:normal}
@@ -226,7 +244,8 @@ th:hover .sort-icon{opacity:.8}
     <button class="new-req-btn" onclick="switchView('newreq')"><span style="font-size:15px;line-height:1">+</span> New request</button>
   </div>
   <div class="bar3" id="pod-bar">
-    <div class="pod-tab active" onclick="setPod('Cx Growth',this)">Cx Growth</div>
+    <div class="pod-tab active" onclick="setPod('all',this)">All pods</div>
+    <div class="pod-tab" onclick="setPod('Cx Growth',this)">Cx Growth</div>
     <div class="pod-tab" onclick="setPod('Cx Payment',this)">Cx Payment</div>
     <div class="pod-tab" onclick="setPod('Exp-Service-Cost',this)">Exp-Service-Cost</div>
     <div class="pod-tab" onclick="setPod('Pricing-Plc',this)">Pricing-Plc</div>
@@ -423,9 +442,11 @@ var TOKEN      = "WE_ANLYTX_2026_X9Q";
 
 // ── STATE ───────────────────────────────────────────────────
 var currentUser   = null;   // { email, name, authorized }
+var EDITORS       = ["Ekta","Aniket","Mohit","Gajinder","Aakash","Sahil"];
+function canEdit(){ return currentUser && EDITORS.indexOf(currentUser.name) > -1; }
 var allTasks      = [];     // raw from sheet
 var projectNames  = [];     // for autocomplete
-var currentPod    = "Cx Growth";
+var currentPod    = "all";
 var currentDateF  = "all";
 var filters       = { sh:[], cat:[], st:[] };
 var selectedPrio  = null;
@@ -521,12 +542,20 @@ function bootApp() {
   setLoadingMsg("Loading your tasks…");
   document.getElementById("loading-spinner").style.display="block";
   document.getElementById("signin-btn-wrap").style.display="none";
+  // Fetch each pod separately in parallel to avoid timeout on large datasets
+  var POD_LIST = ["Cx Growth","Cx Payment","Exp-Service-Cost","Pricing-Plc","Supply Product","Supply Ops"];
+  var podFetches = POD_LIST.map(function(pod){
+    return apiFetch({action:"getTasks", pod:pod, stakeholder:"all"});
+  });
   Promise.all([
-    apiFetch({action:"getTasks",pod:"all",stakeholder:"all"}),
+    Promise.all(podFetches),
     apiFetch({action:"getProjects"})
   ]).then(function(results){
-    allTasks=results[0].tasks||[];
+    var podResults = results[0];
+    allTasks = [];
+    podResults.forEach(function(r){ allTasks = allTasks.concat(r.tasks||[]); });
     projectNames=results[1].projects||[];
+    console.log("ATOM pods loaded:", allTasks.length, "tasks across", [...new Set(allTasks.map(function(t){return t.pod;}))].length, "pods");
     buildStakeholderFilter();
     refreshAll();
     document.getElementById("loading-screen").style.display="none";
@@ -620,18 +649,13 @@ var BOARD_COLS=[
 function buildBoard(tasks,elId){
   var isAllView = elId === "board-all";
 
-  // Filter completed tasks to last 4 weeks only
   var fourWeeksAgo = new Date();
-  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+  fourWeeksAgo.setMonth(fourWeeksAgo.getMonth() - 6);
 
   var displayTasks = tasks.filter(function(t){
     if(normaliseStatus(t.status) !== "done") return true;
-    // For completed, only show if delivered in last 4 weeks
     var dDate = t.deliveredDate ? new Date(t.deliveredDate) : null;
-    if(!dDate || isNaN(dDate)) {
-      // fallback: try finalDeadline
-      dDate = t.finalDeadline ? new Date(t.finalDeadline) : null;
-    }
+    if(!dDate || isNaN(dDate)) dDate = t.finalDeadline ? new Date(t.finalDeadline) : null;
     return dDate && dDate >= fourWeeksAgo;
   });
 
@@ -648,7 +672,11 @@ function buildBoard(tasks,elId){
   BOARD_CATS.forEach(function(cat){
     html+='<div class="board-row"><div class="row-cat"><div class="row-cat-label">'+cat.label+'</div></div>';
     BOARD_COLS.forEach(function(col){
-      html+='<div class="board-cell cat-'+cat.key+'">';
+      // Each cell is a drop zone
+      html+='<div class="board-cell cat-'+cat.key+'" '
+        +'ondragover="event.preventDefault();this.classList.add(\'drag-over\')" '
+        +'ondragleave="this.classList.remove(\'drag-over\')" '
+        +'ondrop="handleDrop(event,\''+col.key+'\',\''+cat.key+'\')">';
       var matching=displayTasks.filter(function(t){return catKey(t.category)===cat.key&&normaliseStatus(t.status)===col.key;});
       if(matching.length){
         matching.sort(function(a,b){
@@ -657,20 +685,20 @@ function buildBoard(tasks,elId){
           return pa-pb;
         });
         matching.forEach(function(t){
-          var dl = t.finalDeadline||t.requestedDeadline||"";
-          var overdue = dl && new Date(dl)<new Date() && col.key!=="done";
-          // Only show assigned priority, and only for non-completed tasks
-          var prio = col.key!=="done" ? (t.assignedPriority||"") : "";
-          var dLabel = col.key==="done"
-            ? (t.deliveredDate ? "Del: "+t.deliveredDate : t.finalDeadline ? "Del: "+t.finalDeadline : "Done")
-            : (dl ? "Due: "+dl : "—");
-          var firstName = t.stakeholder ? t.stakeholder.trim().split(" ")[0] : "";
-          var stakeholderBar = isAllView&&firstName ? '<div class="tc-stakeholder">'+esc(firstName.toUpperCase())+'</div>' : '';
-          // Prio block: empty for completed, shown for active
-          var prioBlock = prio
-            ? '<div class="tc-prio">'+esc(prio)+'</div>'
-            : '<div class="tc-prio tc-prio-empty"></div>';
-          html+='<div class="task-card'+(col.key==="done"?" tc-done":"")+(prio?"":" tc-no-prio")+'" onclick="goTableTask(\''+esc(t.requestId)+'\')">'
+          var dl=t.finalDeadline||t.requestedDeadline||"";
+          var overdue=dl&&new Date(dl)<new Date()&&col.key!=="done";
+          var prio=col.key!=="done"?(t.assignedPriority||""):"";
+          var dLabel=col.key==="done"
+            ?(t.deliveredDate?"Del: "+t.deliveredDate:t.finalDeadline?"Del: "+t.finalDeadline:"Done")
+            :(dl?"Due: "+dl:"—");
+          var firstName=t.stakeholder?t.stakeholder.trim().split(" ")[0]:"";
+          var stakeholderBar=isAllView&&firstName?'<div class="tc-stakeholder">'+esc(firstName.toUpperCase())+'</div>':'';
+          var prioBlock=prio?'<div class="tc-prio">'+esc(prio)+'</div>':'<div class="tc-prio tc-prio-empty"></div>';
+          // Cards are draggable only for editors
+          var draggable=canEdit()?' draggable="true" ondragstart="handleDragStart(event,\''+esc(t.requestId)+'\')"':'';
+          html+='<div class="task-card'+(col.key==="done"?" tc-done":"")+(prio?"":" tc-no-prio")+'"'
+            +draggable
+            +' onclick="goTableTask(\''+esc(t.requestId)+'\')">'
             +prioBlock
             +'<div class="tc-body">'
             +'<div class="tc-project">'+esc(t.projectName||"Untitled")+'</div>'
@@ -722,479 +750,60 @@ function renderTable(tasks){
     tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--text-tertiary)">No tasks match</td></tr>';
     return;
   }
+  var edit = canEdit();
   tbody.innerHTML=tasks.map(function(t){
     var ns=normaliseStatus(t.status);
     var dl=t.finalDeadline||t.requestedDeadline||"";
     var od=dl&&new Date(dl)<new Date()&&ns!=="done";
-    return'<tr>'
+
+    function cell(field, display, extraStyle){
+      var style = extraStyle || "";
+      if(edit){
+        return '<td class="editable-cell" style="'+style+'" onclick="makeEditable(this,__TASK__,''+field+'')" title="Click to edit">'+display+'</td>';
+      }
+      return '<td style="'+style+'">'+display+'</td>';
+    }
+
+    var row = '<tr>'
       +'<td style="color:var(--text-tertiary)">'+esc(t.requestId)+'</td>'
-      +'<td>'+esc(t.stakeholder)+'</td>'
-      +'<td>'+esc(t.category)+'</td>'
-      +'<td style="font-weight:500">'+esc(t.projectName)+'</td>'
-      +'<td style="color:var(--text-secondary)">'+esc(t.task)+'</td>'
-      +'<td>'+statusPill(ns)+'</td>'
-      +'<td>'+prioTag(t.requestedPriority)+'</td>'
-      +'<td>'+prioTag(t.assignedPriority)+'</td>'
-      +'<td>'+esc(t.requestDate)+'</td>'
-      +'<td style="color:'+(od?"#A32D2D":"inherit")+'">'+esc(dl)+'</td>'
-      +'<td>'+esc(t.finalDeadline)+'</td>'
-      +'<td>'+esc(t.deliveredDate)+'</td>'
-      +'<td style="color:var(--text-tertiary);font-size:10px">'+esc((t.analyticsComments||"").slice(0,60))+'</td>'
-    +'</tr>';
-  }).join("");
-}
+      +cell('stakeholder', esc(t.stakeholder))
+      +cell('category', esc(t.category))
+      +cell('projectName', esc(t.projectName), 'font-weight:500')
+      +cell('task', esc((t.task||"").slice(0,60)), 'color:var(--text-secondary)')
+      +cell('status', statusPill(ns))
+      +cell('requestedPriority', prioTag(t.requestedPriority))
+      +cell('assignedPriority', prioTag(t.assignedPriority))
+      +cell('requestDate', esc(t.requestDate))
+      +cell('requestedDeadline', esc(t.requestedDeadline))
+      +cell('finalDeadline', esc(t.finalDeadline), od?"color:#A32D2D":"")
+      +cell('deliveredDate', esc(t.deliveredDate))
+      +cell('analyticsComments', esc((t.analyticsComments||"").slice(0,60).replace(/\[NOTIFIED[^\]]*\]/g,"").trim()), 'font-size:10px;color:var(--text-tertiary)')
+      +'</tr>';
 
-function statusPill(ns){
-  var m={wip:["p-wip","In progress"],notpicked:["p-notpicked","Not picked"],done:["p-done","Completed"]};
-  var d=m[ns]||["p-notpicked","Not picked"];
-  return'<span class="pill '+d[0]+'">'+d[1]+'</span>';
-}
-function prioTag(p){
-  if(!p||p.toString().trim()===""||p==="-") return'<span class="prio-tag pr-none">—</span>';
-  var n=parseInt(p.toString().replace(/[^0-9]/g,""));
-  var cls=n<=2?"pr-high":n<=5?"pr-mid":"pr-low";
-  return'<span class="prio-tag '+cls+'">'+esc(p)+'</span>';
-}
-
-// ── PRIORITY SELECTOR (new request) ──────────────────────────
-function myActiveNonDone(){
-  return allTasks.filter(function(t){
-    return t.stakeholder&&currentUser&&
-      String(t.stakeholder||'').toLowerCase().indexOf(currentUser.name.split(" ")[0].toLowerCase())>-1&&
-      normaliseStatus(t.status)!=="done";
-  });
-}
-
-// Returns map of assignedPriority -> task for a given pod (or all pods if no pod selected)
-// Used to show which assigned priorities are already taken in the selected pod
-function getAsgnPrioMapForPod(pod){
-  var map={};
-  var tasks = allTasks.filter(function(t){
-    var podMatch = !pod || t.pod === pod;
-    return podMatch && normaliseStatus(t.status)!=="done" && t.assignedPriority && String(t.assignedPriority).trim()!=="" && String(t.assignedPriority).trim()!=="-";
-  });
-  tasks.forEach(function(t){
-    var p = String(t.assignedPriority).trim();
-    if(p && !map[p]) map[p]=t;
-  });
-  return map;
-}
-
-// Returns map of requestedPriority -> task for current user's active tasks
-function getReqPrioMap(){
-  var map={};
-  myActiveNonDone().forEach(function(t){
-    var p=(t.requestedPriority||"").toString().trim();
-    if(p&&p!=="-") map[p]=t;
-  });
-  return map;
-}
-
-function renderPrioSelector(){
-  var pod = document.getElementById("nr-pod").value || "";
-  // Use assigned priorities from the selected pod to show what's taken
-  var asgnMap = getAsgnPrioMapForPod(pod);
-  var reqMap  = getReqPrioMap();
-
-  // Build list of priority levels to show (P1–P10, or up to max used + 1)
-  var allPrios = Object.keys(asgnMap).concat(Object.keys(reqMap));
-  var maxN = allPrios.reduce(function(mx,p){
-    var n=parseInt(p.replace(/\D/g,""))||0; return n>mx?n:mx;
-  }, 0);
-  var showCount = Math.max(5, maxN+1);
-  var levels = [];
-  for(var i=1;i<=showCount;i++) levels.push("P"+i);
-
-  var html = levels.map(function(p){
-    var asgnOcc = asgnMap[p];   // taken by analytics team assignment
-    var reqOcc  = reqMap[p];    // taken by my existing request
-    var isSel   = selectedPrio===p;
-    var cls     = "prio-slot ";
-    var badge, proj, labelNote;
-
-    if(isSel){
-      cls += "sel";
-      badge = '<span class="prio-badge pb-sel">Selected</span>';
-      proj  = '<div class="prio-slot-proj">—</div>';
-    } else if(asgnOcc){
-      // Taken by analytics team — show who has it, not selectable
-      cls += "taken";
-      badge = '<span class="prio-badge pb-taken">Assigned</span>';
-      proj  = '<div class="prio-slot-proj" title="'+esc(asgnOcc.projectName||asgnOcc.task||"")+'">'+esc((asgnOcc.projectName||asgnOcc.task||"").slice(0,22))+'</div>';
-    } else if(reqOcc){
-      // Taken by one of my existing requests — can still select (will swap)
-      cls += "available req-taken";
-      badge = '<span class="prio-badge pb-req">My request</span>';
-      proj  = '<div class="prio-slot-proj" title="'+esc(reqOcc.projectName||"")+'">'+esc((reqOcc.projectName||"").slice(0,22))+'</div>';
-    } else {
-      cls += "available";
-      badge = '<span class="prio-badge pb-free">Free</span>';
-      proj  = '<div class="prio-slot-proj">—</div>';
-    }
-
-    var clickable = !asgnOcc; // can't select analytics-assigned priorities
-    return '<div class="'+cls+'"'+(clickable?' onclick="selectNewPrio(\''+p+'\')"':'')+' style="'+(asgnOcc?'cursor:not-allowed;':'cursor:pointer;')+'">'
-      +'<div class="prio-slot-head"><span class="prio-label">'+p+'</span>'+badge+'</div>'
-      +proj+'</div>';
+    // Replace __TASK__ placeholder with actual task reference
+    return row;
   }).join("");
 
-  document.getElementById("prio-group").innerHTML=html;
-
-  var note=document.getElementById("prio-swap-note");
-  if(selectedPrio && reqMap[selectedPrio]){
-    note.style.display="block";
-    note.textContent="⚠ Selecting "+selectedPrio+" will push '"+reqMap[selectedPrio].projectName+"' to the next free slot.";
-  } else if(selectedPrio && asgnMap[selectedPrio]){
-    // deselect if pod changed and this priority is now taken
-    selectedPrio=null;
-    note.style.display="none";
-    document.getElementById("prio-group").innerHTML=html;
-  } else {
-    note.style.display="none";
-  }
-}
-
-function selectNewPrio(p){selectedPrio=p;renderPrioSelector();}
-
-// ── NOT PICKED TABLE ──────────────────────────────────────────
-function renderNotPicked(){
-  var my=myActiveNonDone().filter(function(t){return normaliseStatus(t.status)==="notpicked";});
-  my.sort(function(a,b){
-    var pa=parseInt((a.requestedPriority||"P99").replace(/\D/g,""))||99;
-    var pb=parseInt((b.requestedPriority||"P99").replace(/\D/g,""))||99;
-    return pa-pb;
+  // Wire up editable cells with actual task references
+  var rows = tbody.querySelectorAll("tr");
+  tasks.forEach(function(t, i){
+    if(!edit) return;
+    var tds = rows[i] ? rows[i].querySelectorAll(".editable-cell") : [];
+    var fields = ["stakeholder","category","projectName","task","status","requestedPriority","assignedPriority","requestDate","requestedDeadline","finalDeadline","deliveredDate","analyticsComments"];
+    tds.forEach(function(td, j){
+      (function(task, field){
+        td.onclick = function(){ makeEditable(this, task, field); };
+      })(t, fields[j]);
+    });
   });
-  document.getElementById("np-count-label").textContent=my.length+" pending";
-  var tbody=document.getElementById("np-tbody");
-  if(!my.length){
-    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-tertiary)">No pending requests</td></tr>';
-    return;
+
+  // Show editor badge in header if user can edit
+  var heading = document.getElementById("table-heading");
+  if(edit && heading && !heading.querySelector(".editor-badge")){
+    var badge = document.createElement("span");
+    badge.className = "editor-badge";
+    badge.textContent = "✎ Edit mode";
+    heading.appendChild(badge);
   }
-  var levels=["P1","P2","P3","P4","P5","P6","P7","P8","P9","P10"];
-  tbody.innerHTML=my.map(function(t){
-    var opts=levels.map(function(p){return'<option'+(t.requestedPriority===p?" selected":"")+'>'+p+'</option>';}).join("");
-    return'<tr id="np-row-'+esc(t.requestId)+'">'
-      +'<td style="padding-left:14px;color:var(--text-tertiary)">'+esc(t.requestId)+'</td>'
-      +'<td style="font-weight:500">'+esc(t.projectName||t.task)+'</td>'
-      +'<td>'+esc(t.category)+'</td>'
-      +'<td>'
-        +'<select class="prio-select" data-rid="'+esc(t.requestId)+'" data-pod="'+esc(t.pod)+'" onchange="handleNpChange(this)">'+opts+'</select>'
-        +'<span class="swap-ind" id="si-'+esc(t.requestId)+'"></span>'
-      +'</td>'
-      +'<td>'+prioTag(t.assignedPriority)+'</td>'
-      +'<td style="font-size:11px">'+esc(t.requestedDeadline||t.finalDeadline||"")+'</td>'
-      +'<td style="font-size:11px">'+esc(t.requestDate||"")+'</td>'
-      +'<td><button class="save-btn" id="sb-'+esc(t.requestId)+'" onclick="saveNpPrio(this)">Save</button></td>'
-    +'</tr>';
-  }).join("");
 }
 
-function handleNpChange(sel){
-  var rid=sel.getAttribute("data-rid");
-  var newP=sel.value;
-  var map=getReqPrioMap();
-  var task=allTasks.find(function(t){return t.requestId===rid;});
-  var displaced=map[newP];
-  var ind=document.getElementById("si-"+rid);
-  var note=document.getElementById("np-swap-note");
-  if(displaced&&displaced.requestId!==rid){
-    var bump=nextFreePrio(newP,rid);
-    ind.textContent=" → bumps '"+displaced.projectName.slice(0,20)+"' to "+bump;
-    ind.classList.add("show");
-    note.textContent="Saving will move '"+displaced.projectName+"' from "+newP+" to "+bump+".";
-    note.classList.add("show");
-  }else{ind.classList.remove("show");note.classList.remove("show");}
-  document.getElementById("sb-"+rid).classList.add("show");
-}
-function nextFreePrio(from,excludeRid){
-  var map=getReqPrioMap();
-  var n=parseInt(from.replace(/\D/g,""))+1;
-  while(n<=20){
-    var p="P"+n;
-    if(!map[p]||map[p].requestId===excludeRid) return p;
-    n++;
-  }
-  return "P"+n;
-}
-function saveNpPrio(btn){
-  var rid=btn.id.replace("sb-","");
-  var sel=document.querySelector("select[data-rid='"+rid+"']");
-  var newP=sel.value;
-  var task=allTasks.find(function(t){return t.requestId===rid;});
-  var oldP=task.requestedPriority;
-  var map=getReqPrioMap();
-  var displaced=map[newP];
-
-  // Local state update
-  if(displaced&&displaced.requestId!==rid){
-    var bump=nextFreePrio(newP,rid);
-    displaced.requestedPriority=bump;
-    apiPost({action:"updateTask",data:{requestId:displaced.requestId,pod:displaced.pod,requestedPriority:bump}});
-  }
-  task.requestedPriority=newP;
-  apiPost({action:"updateTask",data:{requestId:rid,pod:sel.getAttribute("data-pod"),requestedPriority:newP}})
-    .then(function(){showToast("Priority updated","success");});
-
-  document.getElementById("np-swap-note").classList.remove("show");
-  renderNotPicked();
-  renderPrioSelector();
-}
-
-// ── SUBMIT NEW REQUEST ────────────────────────────────────────
-function submitRequest(){
-  var pod=document.getElementById("nr-pod").value;
-  var cat=document.getElementById("nr-cat").value;
-  var proj=document.getElementById("nr-project").value.trim();
-  var task=document.getElementById("nr-task").value.trim();
-  var dl=document.getElementById("nr-deadline").value;
-
-  if(!pod||!cat||!proj||!task||!selectedPrio||!dl){
-    showToast("Please fill all required fields","error");return;
-  }
-  if(submitting) return;
-  submitting=true;
-  document.getElementById("submit-btn").disabled=true;
-  document.getElementById("submit-btn").textContent="Submitting…";
-
-  // If selected priority is taken, bump the displaced task first
-  var map=getReqPrioMap();
-  var displaced=map[selectedPrio];
-  var bumpPromise=Promise.resolve();
-  if(displaced){
-    var bump=nextFreePrio(selectedPrio,null);
-    displaced.requestedPriority=bump;
-    bumpPromise=apiPost({action:"updateTask",data:{requestId:displaced.requestId,pod:displaced.pod,requestedPriority:bump}});
-  }
-
-  bumpPromise.then(function(){
-    return apiPost({action:"createTask",data:{
-      pod:pod,
-      stakeholder:currentUser.name,
-      category:cat,
-      projectName:proj,
-      task:task,
-      requestedPriority:selectedPrio,
-      requestedDeadline:dl,
-      stakeholderComments:document.getElementById("nr-info").value.trim()
-    }});
-  }).then(function(res){
-    if(res.success){
-      showToast("Request #"+res.requestId+" submitted!","success");
-      // Add to local state
-      allTasks.push({
-        requestId:res.requestId.toString(),stakeholder:currentUser.name,
-        category:cat,projectName:proj,task:task,
-        requestedPriority:selectedPrio,assignedPriority:"",
-        status:"Not Picked",requestDate:todayStr(),
-        requestedDeadline:dl,finalDeadline:"",deliveredDate:"",
-        stakeholderComments:"",analyticsComments:"",pod:pod
-      });
-      // Reset form
-      document.getElementById("nr-pod").value="";
-      document.getElementById("nr-cat").value="";
-      document.getElementById("nr-project").value="";
-      document.getElementById("nr-task").value="";
-      document.getElementById("nr-deadline").value="";
-      document.getElementById("nr-info").value="";
-      document.getElementById("char-ct").textContent="0";
-      selectedPrio=null;
-      refreshAll();
-      renderNotPicked();
-      renderPrioSelector();
-    }else{showToast("Submission failed. Try again.","error");}
-  }).catch(function(){showToast("Network error. Try again.","error");})
-  .finally(function(){
-    submitting=false;
-    document.getElementById("submit-btn").disabled=false;
-    document.getElementById("submit-btn").textContent="Submit request ↗";
-  });
-}
-
-// ── AUTOCOMPLETE ─────────────────────────────────────────────
-function handleProjInput(val){
-  document.getElementById("char-ct").textContent=val.length;
-  var list=document.getElementById("ac-list");
-  if(val.length<2){list.classList.remove("open");list.innerHTML="";return;}
-  var re=new RegExp(val.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"i");
-  var matches=projectNames.filter(function(p){return re.test(p);}).slice(0,8);
-  var html=matches.map(function(p){
-    var hi=p.replace(re,function(m){return"<em>"+m+"</em>";});
-    return'<div class="ac-item" onclick="selectProj(\''+esc(p)+'\')"><span class="ac-badge">existing</span>'+hi+'</div>';
-  }).join("");
-  if(!matches.find(function(p){return p.toLowerCase()===val.toLowerCase();})){
-    html+='<div class="ac-item" onclick="selectProj(\''+esc(val)+'\')"><span class="ac-badge" style="background:#E1F5EE;color:#085041">new</span>'+esc(val)+'</div>';
-  }
-  list.innerHTML=html;list.classList.add("open");
-}
-function selectProj(v){
-  document.getElementById("nr-project").value=v;
-  document.getElementById("char-ct").textContent=v.length;
-  document.getElementById("ac-list").classList.remove("open");
-}
-
-// ── NAV / FILTER HELPERS ──────────────────────────────────────
-function switchView(v){
-  document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});
-  document.querySelectorAll(".nav2").forEach(function(n){n.classList.remove("active");});
-  document.getElementById("page-"+v).classList.add("active");
-  var idx={myreq:0,pipeline:1,table:2,newreq:3}[v];
-  document.querySelectorAll(".nav2")[idx].classList.add("active");
-  if(v==="table") filterTable();
-  if(v==="newreq"){renderNotPicked();renderPrioSelector();}
-}
-function setPod(pod,el){
-  currentPod=pod;
-  document.querySelectorAll(".pod-tab").forEach(function(t){t.classList.remove("active");});
-  el.classList.add("active");
-  refreshAll();
-  var active=document.querySelector(".page.active");
-  if(active&&active.id==="page-table") filterTable();
-}
-function setDateFilter(f,el){
-  currentDateF=f;
-  el.closest(".date-filters").querySelectorAll(".df-chip").forEach(function(c){c.classList.remove("active");});
-  el.classList.add("active");
-  refreshAll();
-}
-function refreshAll(){
-  var my=getMyTasks(); var all=getAllFilteredTasks();
-  updateTiles(my,"t"); updateTiles(all,"p");
-  buildBoard(my,"board-my"); buildBoard(all,"board-all");
-  filterTable();
-}
-function goTable(status){
-  switchView("table");
-  filters.st=[status];
-  document.querySelectorAll("[id^='chk-st-']").forEach(function(c){c.classList.remove("checked");c.textContent="";});
-  var chk=document.getElementById("chk-st-"+status);
-  if(chk){chk.classList.add("checked");chk.textContent="✓";}
-  updateTriggerLabel("st"); filterTable();
-}
-function goTableTask(rid){
-  switchView("table");
-  filters={sh:[],cat:[],st:[]};
-  ["sh","cat","st"].forEach(function(k){
-    document.querySelectorAll("[id^='chk-"+k+"-']").forEach(function(c){c.classList.remove("checked");c.textContent="";});
-    updateTriggerLabel(k);
-  });
-  renderTable(getAllFilteredTasks().filter(function(t){return t.requestId===rid;}));
-}
-function toggleDrop(key){
-  var id="drop-"+key;
-  var open=document.getElementById(id).classList.contains("open");
-  document.querySelectorAll(".ms-dropdown").forEach(function(d){d.classList.remove("open");});
-  if(!open) document.getElementById(id).classList.add("open");
-}
-function toggleOpt(filterKey,val){
-  var arr=filters[filterKey];var idx=arr.indexOf(val);
-  var chk=document.getElementById("chk-"+filterKey+"-"+val);
-  if(idx>-1){arr.splice(idx,1);if(chk){chk.classList.remove("checked");chk.textContent="";}}
-  else{arr.push(val);if(chk){chk.classList.add("checked");chk.textContent="✓";}}
-  updateTriggerLabel(filterKey); filterTable();
-}
-function clearFilter(filterKey){
-  filters[filterKey]=[];
-  document.querySelectorAll("[id^='chk-"+filterKey+"-']").forEach(function(c){c.classList.remove("checked");c.textContent="";});
-  updateTriggerLabel(filterKey); filterTable();
-}
-function updateTriggerLabel(key){
-  var labels={sh:"Stakeholder",cat:"Category",st:"Status"};
-  var arr=filters[key];
-  var trig=document.getElementById("trig-"+key);
-  var lbl=document.getElementById("lbl-"+key);
-  if(arr.length===0){lbl.textContent=labels[key];trig.classList.remove("has-sel");}
-  else if(arr.length===1){lbl.textContent=arr[0];trig.classList.add("has-sel");}
-  else{lbl.textContent=labels[key]+" ("+arr.length+")";trig.classList.add("has-sel");}
-}
-
-// ── SORT TABLE ───────────────────────────────────────────────
-var sortState = { field: null, asc: true };
-
-function sortTable(field) {
-  if(sortState.field === field){
-    sortState.asc = !sortState.asc;
-  } else {
-    sortState.field = field;
-    sortState.asc = true;
-  }
-  // Update sort icons
-  document.querySelectorAll('.sort-icon').forEach(function(el){ el.textContent = '⇅'; el.style.opacity='.4'; });
-  var icon = document.getElementById('si-'+field);
-  if(icon){ icon.textContent = sortState.asc ? ' ↑' : ' ↓'; icon.style.opacity='1'; }
-  filterTable();
-}
-
-function sortedTasks(tasks) {
-  if(!sortState.field) return tasks;
-  var f = sortState.field;
-  var asc = sortState.asc;
-  return tasks.slice().sort(function(a, b){
-    var av = (a[f]||'').toString().toLowerCase();
-    var bv = (b[f]||'').toString().toLowerCase();
-    // Numeric sort for priority fields and request ID
-    if(f==='requestedPriority'||f==='assignedPriority'){
-      av = parseInt(av.replace(/\D/g,''))||999;
-      bv = parseInt(bv.replace(/\D/g,''))||999;
-      return asc ? av-bv : bv-av;
-    }
-    if(f==='requestId'){
-      av = parseInt(av)||0; bv = parseInt(bv)||0;
-      return asc ? av-bv : bv-av;
-    }
-    // Date sort
-    if(f==='requestDate'||f==='requestedDeadline'||f==='finalDeadline'||f==='deliveredDate'){
-      var da = av ? new Date(av) : new Date(0);
-      var db = bv ? new Date(bv) : new Date(0);
-      return asc ? da-db : db-da;
-    }
-    // String sort
-    if(av<bv) return asc ? -1 : 1;
-    if(av>bv) return asc ? 1 : -1;
-    return 0;
-  });
-}
-
-// ── REFRESH ──────────────────────────────────────────────────
-function refreshData(){
-  var btn=document.getElementById("refresh-btn");
-  btn.style.opacity=".5";
-  btn.style.pointerEvents="none";
-  Promise.all([
-    apiFetch({action:"getTasks",pod:"all",stakeholder:"all"}),
-    apiFetch({action:"getProjects"})
-  ]).then(function(results){
-    allTasks=results[0].tasks||[];
-    projectNames=results[1].projects||[];
-    buildStakeholderFilter();
-    refreshAll();
-    showToast("Data refreshed","success");
-  }).catch(function(){
-    showToast("Refresh failed. Try again.","error");
-  }).finally(function(){
-    btn.style.opacity="1";
-    btn.style.pointerEvents="auto";
-  });
-}
-
-// ── UTILS ────────────────────────────────────────────────────
-function esc(s){
-  return(s||"").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
-}
-function todayStr(){
-  var d=new Date();
-  return d.getDate()+" "+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]+" "+d.getFullYear();
-}
-function showToast(msg,type){
-  var t=document.getElementById("toast");
-  t.textContent=msg; t.className="toast "+(type||"");
-  t.classList.add("show");
-  setTimeout(function(){t.classList.remove("show");},3000);
-}
-
-document.addEventListener("click",function(e){
-  if(!e.target.closest(".ms-wrap")) document.querySelectorAll(".ms-dropdown").forEach(function(d){d.classList.remove("open");});
-  if(!e.target.closest(".autocomplete-wrap")) document.getElementById("ac-list").classList.remove("open");
-});
-</script>
-</body>
-</html>
