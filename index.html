@@ -205,21 +205,7 @@ th:hover .sort-icon{opacity:.8}
   <div class="loading-spinner" id="loading-spinner"></div>
   <div class="loading-msg" id="loading-msg">Checking sign-in…</div>
   <div id="signin-btn-wrap" style="display:none;margin-top:20px">
-    <div id="g_id_onload"
-      data-client_id="763860246402-3purdgaufio5b3khi6j29mbcvmgj3dme.apps.googleusercontent.com"
-      data-callback="handleGoogleSignIn"
-      data-auto_select="false"
-      data-use_fedcm_for_prompt="false"
-      data-itp_support="false">
-    </div>
-    <div class="g_id_signin"
-      data-type="standard"
-      data-shape="rectangular"
-      data-theme="outline"
-      data-text="sign_in_with"
-      data-size="large"
-      data-logo_alignment="left">
-    </div>
+    <div id="g_id_signin_btn"></div>
     <div id="signin-error" style="margin-top:12px;font-size:12px;color:#FF7B7B;text-align:center;display:none"></div>
   </div>
 </div>
@@ -567,25 +553,29 @@ function bootApp() {
   });
 }
 
+function initGoogleSignIn(){
+  if(!window.google || !window.google.accounts){
+    setTimeout(initGoogleSignIn, 200);
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: "763860246402-3purdgaufio5b3khi6j29mbcvmgj3dme.apps.googleusercontent.com",
+    callback: handleGoogleSignIn,
+    use_fedcm_for_prompt: false,
+    auto_select: false,
+    cancel_on_tap_outside: false
+  });
+  google.accounts.id.renderButton(
+    document.getElementById("g_id_signin_btn"),
+    { theme:"outline", size:"large", text:"sign_in_with", shape:"rectangular", logo_alignment:"left", width:280 }
+  );
+  document.getElementById("loading-spinner").style.display="none";
+  document.getElementById("loading-msg").textContent="Sign in with your Wheelseye account";
+  document.getElementById("signin-btn-wrap").style.display="block";
+}
+
 window.addEventListener("load",function(){
-  setTimeout(function(){
-    document.getElementById("loading-spinner").style.display="none";
-    document.getElementById("loading-msg").textContent="Sign in with your Wheelseye account";
-    document.getElementById("signin-btn-wrap").style.display="block";
-    // Render button manually with popup mode (bypasses FedCM)
-    if(window.google && window.google.accounts){
-      google.accounts.id.initialize({
-        client_id: "763860246402-3purdgaufio5b3khi6j29mbcvmgj3dme.apps.googleusercontent.com",
-        callback: handleGoogleSignIn,
-        use_fedcm_for_prompt: false,
-        auto_select: false
-      });
-      google.accounts.id.renderButton(
-        document.getElementById("signin-btn-wrap"),
-        { theme:"outline", size:"large", text:"sign_in_with", shape:"rectangular", logo_alignment:"left" }
-      );
-    }
-  }, 1500);
+  initGoogleSignIn();
 });
 
 function setLoadingMsg(m){document.getElementById("loading-msg").textContent=m;}
